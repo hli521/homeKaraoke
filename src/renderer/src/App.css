@@ -67,6 +67,10 @@ body {
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
+.header-audio-toggle {
+  flex-shrink: 0;
+}
+
 .ktv-input {
   background: transparent;
   border: none;
@@ -82,17 +86,6 @@ body {
   gap: 2rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-}
-
-.header-controls .region-tabs {
-  flex: 1;
 }
 
 .region-tab {
@@ -260,9 +253,21 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .header-controls {
+  .search-bar-container,
+  .player-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .search-form,
+  .header-audio-toggle,
+  .player-header-actions,
+  .player-audio-toggle {
+    width: 100%;
+  }
+
+  .player-header-actions {
+    justify-content: space-between;
   }
 }
 
@@ -372,6 +377,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1.5rem;
 }
 
 .song-title .name {
@@ -383,6 +389,17 @@ body {
 .song-title .artist {
   font-size: 1.2rem;
   color: var(--ktv-text-dim);
+}
+
+.player-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.player-audio-toggle {
+  background-color: #101015;
 }
 
 .close-btn {

@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { X, RotateCcw, Play, Pause } from 'lucide-react'
+import type { YouTubeAudioMode } from '../../services/youtube'
+import AudioModeToggle from '../AudioModeToggle/AudioModeToggle'
 
 interface PlayerProps {
   song: {
@@ -7,10 +9,18 @@ interface PlayerProps {
     artist: { name: string }
   }
   videoId: string | null
+  audioMode: YouTubeAudioMode
+  onAudioModeChange: (audioMode: YouTubeAudioMode) => void
   onClose: () => void
 }
 
-const Player: React.FC<PlayerProps> = ({ song, videoId, onClose }) => {
+const Player: React.FC<PlayerProps> = ({
+  song,
+  videoId,
+  audioMode,
+  onAudioModeChange,
+  onClose
+}) => {
   const [isPlaying, setIsPlaying] = useState(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -38,9 +48,16 @@ const Player: React.FC<PlayerProps> = ({ song, videoId, onClose }) => {
             <span className="name">{song.name}</span>
             <span className="artist">{song.artist.name}</span>
           </div>
-          <button className="close-btn" onClick={onClose}>
-            <X size={24} />
-          </button>
+          <div className="player-header-actions">
+            <AudioModeToggle
+              audioMode={audioMode}
+              onAudioModeChange={onAudioModeChange}
+              className="player-audio-toggle"
+            />
+            <button className="close-btn" onClick={onClose}>
+              <X size={24} />
+            </button>
+          </div>
         </header>
 
         <div className="video-container">

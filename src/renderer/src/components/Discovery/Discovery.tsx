@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
-import { Search, Music, Mic2, ArrowLeft, MicOff, Volume2 } from 'lucide-react'
+import { Search, Music, Mic2, ArrowLeft } from 'lucide-react'
 import { searchArtists, searchTracks } from '../../services/music-metadata'
 import type { ArtistResult, TrackResult } from '../../services/music-metadata'
 import { searchYouTubeKaraoke } from '../../services/youtube'
 import type { YouTubeAudioMode } from '../../services/youtube'
 import Player from '../Player/Player'
+import AudioModeToggle from '../AudioModeToggle/AudioModeToggle'
 
 type Region = {
   id: string
@@ -172,7 +173,12 @@ type DisplayArtist = {
   name: string
 }
 
-const Discovery = (): ReactElement => {
+type DiscoveryProps = {
+  audioMode: YouTubeAudioMode
+  onAudioModeChange: (audioMode: YouTubeAudioMode) => void
+}
+
+const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactElement => {
   const [activeRegion, setActiveRegion] = useState<Region>(regions[0])
   const [displayArtists, setDisplayArtists] = useState<DisplayArtist[]>(
     regions[0].famousArtists.map((name) => ({ name }))
@@ -180,7 +186,6 @@ const Discovery = (): ReactElement => {
   const [displayTracks, setDisplayTracks] = useState<TrackResult[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  const [audioMode, setAudioMode] = useState<YouTubeAudioMode>('karaoke')
 
   const [selectedSong, setSelectedSong] = useState<TrackResult | null>(null)
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null)
@@ -240,6 +245,8 @@ const Discovery = (): ReactElement => {
         <Player
           song={selectedSong}
           videoId={currentVideoId}
+          audioMode={audioMode}
+          onAudioModeChange={onAudioModeChange}
           onClose={() => {
             setSelectedSong(null)
             setCurrentVideoId(null)
@@ -269,6 +276,11 @@ const Discovery = (): ReactElement => {
               className="ktv-input"
             />
           </form>
+          <AudioModeToggle
+            audioMode={audioMode}
+            onAudioModeChange={onAudioModeChange}
+            className="header-audio-toggle"
+          />
         </div>
         {!searchQuery && (
           <div className="header-controls">
@@ -286,26 +298,6 @@ const Discovery = (): ReactElement => {
                   {region.name}
                 </button>
               ))}
-            </div>
-            <div className="audio-mode-toggle" aria-label="Playback source">
-              <button
-                type="button"
-                className={`audio-mode-btn ${audioMode === 'karaoke' ? 'active' : ''}`}
-                onClick={() => setAudioMode('karaoke')}
-                title="Find karaoke or instrumental versions"
-              >
-                <MicOff size={18} />
-                <span>Karaoke</span>
-              </button>
-              <button
-                type="button"
-                className={`audio-mode-btn ${audioMode === 'original' ? 'active' : ''}`}
-                onClick={() => setAudioMode('original')}
-                title="Find original audio, official videos, or lyric videos"
-              >
-                <Volume2 size={18} />
-                <span>Original</span>
-              </button>
             </div>
           </div>
         )}
