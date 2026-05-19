@@ -13,3 +13,16 @@ export const searchYouTubeKaraoke = async (
     return null
   }
 }
+
+export const hasYouTubeKaraokeSource = async (
+  artist: string,
+  song: string,
+  audioMode: YouTubeAudioMode
+): Promise<boolean> => {
+  try {
+    return await window.api.youtubeHasSource({ artist, song, audioMode })
+  } catch (error) {
+    console.error('YouTube source check failed', error)
+    return false
+  }
+}

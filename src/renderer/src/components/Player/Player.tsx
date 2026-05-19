@@ -9,6 +9,7 @@ interface PlayerProps {
     artist: { name: string }
   }
   videoId: string | null
+  videoSearchStatus: 'searching' | 'found' | 'not-found'
   audioMode: YouTubeAudioMode
   onAudioModeChange: (audioMode: YouTubeAudioMode) => void
   onClose: () => void
@@ -17,6 +18,7 @@ interface PlayerProps {
 const Player: React.FC<PlayerProps> = ({
   song,
   videoId,
+  videoSearchStatus,
   audioMode,
   onAudioModeChange,
   onClose
@@ -61,7 +63,7 @@ const Player: React.FC<PlayerProps> = ({
         </header>
 
         <div className="video-container">
-          {videoId ? (
+          {videoSearchStatus === 'found' && videoId ? (
             <iframe
               ref={iframeRef}
               src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
@@ -70,9 +72,14 @@ const Player: React.FC<PlayerProps> = ({
               allowFullScreen
               className="ktv-video"
             ></iframe>
+          ) : videoSearchStatus === 'searching' ? (
+            <div className="no-video">
+              <p>Searching for {audioMode === 'karaoke' ? 'karaoke' : 'original'} version...</p>
+            </div>
           ) : (
             <div className="no-video">
-              <p>Searching for Karaoke version...</p>
+              <p>No matching {audioMode === 'karaoke' ? 'karaoke' : 'original'} video found.</p>
+              <span>Try the other mode or a more specific song/artist search.</span>
             </div>
           )}
         </div>

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
-import { Search, Music, Mic2, ArrowLeft } from 'lucide-react'
+import { Search, Music, Mic2, ArrowLeft, Plus, X } from 'lucide-react'
 import { searchArtists, searchTracks } from '../../services/music-metadata'
 import type { ArtistResult, TrackResult } from '../../services/music-metadata'
-import { searchYouTubeKaraoke } from '../../services/youtube'
+import { hasYouTubeKaraokeSource, searchYouTubeKaraoke } from '../../services/youtube'
 import type { YouTubeAudioMode } from '../../services/youtube'
 import Player from '../Player/Player'
 import AudioModeToggle from '../AudioModeToggle/AudioModeToggle'
@@ -130,6 +130,40 @@ const regions = [
   }
 ]
 
+type CustomArtistsByRegion = Record<string, string[]>
+
+const CUSTOM_ARTISTS_STORAGE_KEY = 'karaoke.customArtistsByRegion'
+const REMOVED_ARTISTS_STORAGE_KEY = 'karaoke.removedArtistsByRegion'
+const MAX_SONG_SOURCE_CHECKS = 12
+
+const readCustomArtists = (): CustomArtistsByRegion => {
+  try {
+    const storedArtists = window.localStorage.getItem(CUSTOM_ARTISTS_STORAGE_KEY)
+    return storedArtists ? (JSON.parse(storedArtists) as CustomArtistsByRegion) : {}
+  } catch (error) {
+    console.error('Failed to read custom artists', error)
+    return {}
+  }
+}
+
+const writeCustomArtists = (customArtists: CustomArtistsByRegion): void => {
+  window.localStorage.setItem(CUSTOM_ARTISTS_STORAGE_KEY, JSON.stringify(customArtists))
+}
+
+const readRemovedArtists = (): CustomArtistsByRegion => {
+  try {
+    const storedArtists = window.localStorage.getItem(REMOVED_ARTISTS_STORAGE_KEY)
+    return storedArtists ? (JSON.parse(storedArtists) as CustomArtistsByRegion) : {}
+  } catch (error) {
+    console.error('Failed to read removed artists', error)
+    return {}
+  }
+}
+
+const writeRemovedArtists = (removedArtists: CustomArtistsByRegion): void => {
+  window.localStorage.setItem(REMOVED_ARTISTS_STORAGE_KEY, JSON.stringify(removedArtists))
+}
+
 const normalizeArtistName = (name: string): string =>
   name
     .toLowerCase()
@@ -168,9 +202,25 @@ const getTopRelevantArtists = (artists: ArtistResult[], query: string): ArtistRe
     .slice(0, 5)
 }
 
+const filterTracksWithVideoSource = async (
+  tracks: TrackResult[],
+  audioMode: YouTubeAudioMode
+): Promise<TrackResult[]> => {
+  const candidateTracks = tracks.slice(0, MAX_SONG_SOURCE_CHECKS)
+  const sourceChecks = await Promise.all(
+    candidateTracks.map(async (track) => ({
+      track,
+      hasSource: await hasYouTubeKaraokeSource(track.artist.name, track.name, audioMode)
+    }))
+  )
+
+  return sourceChecks.filter((result) => result.hasSource).map((result) => result.track)
+}
+
 type DisplayArtist = {
   id?: number
   name: string
+  source?: 'default' | 'custom' | 'search'
 }
 
 type DiscoveryProps = {
@@ -178,21 +228,128 @@ type DiscoveryProps = {
   onAudioModeChange: (audioMode: YouTubeAudioMode) => void
 }
 
+const getRegionDisplayArtists = (
+  region: Region,
+  customArtistsByRegion: CustomArtistsByRegion,
+  removedArtistsByRegion: CustomArtistsByRegion
+): DisplayArtist[] => {
+  const seen = new Set<string>()
+  const removedArtists = new Set(
+    (removedArtistsByRegion[region.id] || []).map((artistName) => normalizeArtistName(artistName))
+  )
+
+  return [
+    ...region.famousArtists.map((name) => ({ name, source: 'default' as const })),
+    ...(customArtistsByRegion[region.id] || []).map((name) => ({ name, source: 'custom' as const }))
+  ].filter((name) => {
+    const normalizedName = normalizeArtistName(name.name)
+    if (!normalizedName || seen.has(normalizedName) || removedArtists.has(normalizedName)) {
+      return false
+    }
+    seen.add(normalizedName)
+    return true
+  })
+}
+
 const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactElement => {
+  const [customArtistsByRegion, setCustomArtistsByRegion] =
+    useState<CustomArtistsByRegion>(readCustomArtists)
+  const [removedArtistsByRegion, setRemovedArtistsByRegion] =
+    useState<CustomArtistsByRegion>(readRemovedArtists)
   const [activeRegion, setActiveRegion] = useState<Region>(regions[0])
   const [displayArtists, setDisplayArtists] = useState<DisplayArtist[]>(
-    regions[0].famousArtists.map((name) => ({ name }))
+    getRegionDisplayArtists(regions[0], customArtistsByRegion, removedArtistsByRegion)
   )
   const [displayTracks, setDisplayTracks] = useState<TrackResult[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [newArtistName, setNewArtistName] = useState('')
+  const [isAddingArtist, setIsAddingArtist] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const [selectedSong, setSelectedSong] = useState<TrackResult | null>(null)
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null)
+  const [videoSearchStatus, setVideoSearchStatus] = useState<'searching' | 'found' | 'not-found'>(
+    'not-found'
+  )
 
-  const loadInitialArtists = (region: Region = activeRegion): void => {
-    setDisplayArtists(region.famousArtists.map((name) => ({ name })))
+  const loadInitialArtists = (
+    region: Region = activeRegion,
+    nextCustomArtistsByRegion: CustomArtistsByRegion = customArtistsByRegion,
+    nextRemovedArtistsByRegion: CustomArtistsByRegion = removedArtistsByRegion
+  ): void => {
+    setDisplayArtists(
+      getRegionDisplayArtists(region, nextCustomArtistsByRegion, nextRemovedArtistsByRegion)
+    )
     setDisplayTracks([])
+  }
+
+  const saveArtistShortcut = (): void => {
+    const trimmedArtistName = newArtistName.trim()
+    if (!trimmedArtistName) return
+
+    const existingArtistNames = getRegionDisplayArtists(
+      activeRegion,
+      customArtistsByRegion,
+      removedArtistsByRegion
+    ).map((artist) => artist.name)
+    const normalizedArtistName = normalizeArtistName(trimmedArtistName)
+    const alreadyExists = existingArtistNames.some(
+      (existingArtistName) => normalizeArtistName(existingArtistName) === normalizedArtistName
+    )
+
+    if (alreadyExists) {
+      return
+    }
+
+    const nextRemovedArtists = (removedArtistsByRegion[activeRegion.id] || []).filter(
+      (removedArtistName) => normalizeArtistName(removedArtistName) !== normalizedArtistName
+    )
+    const nextCustomArtistsByRegion = {
+      ...customArtistsByRegion,
+      [activeRegion.id]: [...(customArtistsByRegion[activeRegion.id] || []), trimmedArtistName]
+    }
+    const nextRemovedArtistsByRegion = {
+      ...removedArtistsByRegion,
+      [activeRegion.id]: nextRemovedArtists
+    }
+
+    setCustomArtistsByRegion(nextCustomArtistsByRegion)
+    setRemovedArtistsByRegion(nextRemovedArtistsByRegion)
+    writeCustomArtists(nextCustomArtistsByRegion)
+    writeRemovedArtists(nextRemovedArtistsByRegion)
+    loadInitialArtists(activeRegion, nextCustomArtistsByRegion, nextRemovedArtistsByRegion)
+    setNewArtistName('')
+    setIsAddingArtist(false)
+  }
+
+  const cancelArtistShortcut = (): void => {
+    setNewArtistName('')
+    setIsAddingArtist(false)
+  }
+
+  const removeArtistShortcut = (artist: DisplayArtist): void => {
+    const normalizedArtistName = normalizeArtistName(artist.name)
+    const nextCustomArtists = (customArtistsByRegion[activeRegion.id] || []).filter(
+      (customArtistName) => normalizeArtistName(customArtistName) !== normalizedArtistName
+    )
+    const nextRemovedArtists = Array.from(
+      new Set([...(removedArtistsByRegion[activeRegion.id] || []), artist.name])
+    )
+
+    const nextCustomArtistsByRegion = {
+      ...customArtistsByRegion,
+      [activeRegion.id]: nextCustomArtists
+    }
+    const nextRemovedArtistsByRegion = {
+      ...removedArtistsByRegion,
+      [activeRegion.id]: nextRemovedArtists
+    }
+
+    setCustomArtistsByRegion(nextCustomArtistsByRegion)
+    setRemovedArtistsByRegion(nextRemovedArtistsByRegion)
+    writeCustomArtists(nextCustomArtistsByRegion)
+    writeRemovedArtists(nextRemovedArtistsByRegion)
+    loadInitialArtists(activeRegion, nextCustomArtistsByRegion, nextRemovedArtistsByRegion)
   }
 
   const handleSearch = async (query: string): Promise<void> => {
@@ -207,12 +364,14 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
       setDisplayArtists(
         getTopRelevantArtists(artists, query).map((artist) => ({
           name: artist.name,
-          id: artist.artistId
+          id: artist.artistId,
+          source: 'search'
         }))
       )
 
       const songResults = await searchTracks(query, activeRegion.code)
-      setDisplayTracks(songResults || [])
+      const tracksWithSources = await filterTracksWithVideoSource(songResults || [], audioMode)
+      setDisplayTracks(tracksWithSources)
     } catch (error) {
       console.error('Search failed', error)
     } finally {
@@ -222,13 +381,17 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
 
   const playSong = async (track: TrackResult): Promise<void> => {
     setSelectedSong(track)
+    setCurrentVideoId(null)
+    setVideoSearchStatus('searching')
     setLoading(true)
     try {
       const videoId = await searchYouTubeKaraoke(track.artist.name, track.name, audioMode)
       setCurrentVideoId(videoId)
+      setVideoSearchStatus(videoId ? 'found' : 'not-found')
     } catch (error) {
       console.error('Failed to find video', error)
       setCurrentVideoId(null)
+      setVideoSearchStatus('not-found')
     } finally {
       setLoading(false)
     }
@@ -245,11 +408,13 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
         <Player
           song={selectedSong}
           videoId={currentVideoId}
+          videoSearchStatus={videoSearchStatus}
           audioMode={audioMode}
           onAudioModeChange={onAudioModeChange}
           onClose={() => {
             setSelectedSong(null)
             setCurrentVideoId(null)
+            setVideoSearchStatus('not-found')
           }}
         />
       )}
@@ -308,7 +473,7 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
           <div className="loading-state">Loading Library...</div>
         ) : (
           <div className="section-container">
-            {displayArtists.length > 0 && (
+            {(displayArtists.length > 0 || !searchQuery) && (
               <>
                 <h2 className="section-title">
                   {searchQuery ? 'Artists Found' : `Artists from ${activeRegion.name}`}
@@ -320,10 +485,62 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
                       className="artist-card simple"
                       onClick={() => handleSearch(artist.name.split(' (')[0])}
                     >
+                      {!searchQuery && (
+                        <button
+                          type="button"
+                          className="remove-artist-btn"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            removeArtistShortcut(artist)
+                          }}
+                          title={`Remove ${artist.name}`}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                       <Mic2 size={30} className="artist-icon" />
                       <span className="artist-name-label">{artist.name}</span>
                     </div>
                   ))}
+                  {!searchQuery && isAddingArtist && (
+                    <form
+                      className="artist-card simple add-artist-card editing-artist-card"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        saveArtistShortcut()
+                      }}
+                    >
+                      <input
+                        className="artist-shortcut-input"
+                        value={newArtistName}
+                        onChange={(event) => setNewArtistName(event.target.value)}
+                        autoFocus
+                        placeholder="Artist name"
+                      />
+                      <div className="artist-shortcut-actions">
+                        <button type="submit" className="artist-shortcut-save">
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="artist-shortcut-cancel"
+                          onClick={cancelArtistShortcut}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                  {!searchQuery && !isAddingArtist && (
+                    <button
+                      type="button"
+                      className="artist-card simple add-artist-card"
+                      onClick={() => setIsAddingArtist(true)}
+                    >
+                      <Plus size={32} className="artist-icon" />
+                      <span className="artist-name-label">Add artist</span>
+                    </button>
+                  )}
                 </div>
               </>
             )}

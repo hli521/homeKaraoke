@@ -221,6 +221,22 @@ const findBestYouTubeVideo = (
   )
 }
 
+const getBestYouTubeVideoId = async (request: YouTubeSearchRequest): Promise<string | null> => {
+  const searches = await Promise.all(
+    buildYouTubeQueries(request).map((query) => ytSearch(query) as Promise<YouTubeSearchResult>)
+  )
+  const seenVideoIds = new Set<string>()
+  const videos = searches
+    .flatMap((result) => result.videos || [])
+    .filter((video) => {
+      if (!video.videoId || seenVideoIds.has(video.videoId)) return false
+      seenVideoIds.add(video.videoId)
+      return true
+    })
+
+  return findBestYouTubeVideo(videos, request)
+}
+
 if (!existsSync(downloadFolder)) {
   mkdirSync(downloadFolder, { recursive: true })
 }
@@ -276,22 +292,19 @@ export const setupIpcHandlers = (mainWindow: BrowserWindow): void => {
 
   ipcMain.handle('youtube-search', async (_event, request: YouTubeSearchRequest) => {
     try {
-      const searches = await Promise.all(
-        buildYouTubeQueries(request).map((query) => ytSearch(query) as Promise<YouTubeSearchResult>)
-      )
-      const seenVideoIds = new Set<string>()
-      const videos = searches
-        .flatMap((result) => result.videos || [])
-        .filter((video) => {
-          if (!video.videoId || seenVideoIds.has(video.videoId)) return false
-          seenVideoIds.add(video.videoId)
-          return true
-        })
-
-      return findBestYouTubeVideo(videos, request)
+      return getBestYouTubeVideoId(request)
     } catch (error) {
       console.error('youtube-search failed', error)
       return null
+    }
+  })
+
+  ipcMain.handle('youtube-has-source', async (_event, request: YouTubeSearchRequest) => {
+    try {
+      return Boolean(await getBestYouTubeVideoId(request))
+    } catch (error) {
+      console.error('youtube-has-source failed', error)
+      return false
     }
   })
 
