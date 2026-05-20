@@ -299,15 +299,6 @@ export const setupIpcHandlers = (mainWindow: BrowserWindow): void => {
     }
   })
 
-  ipcMain.handle('youtube-has-source', async (_event, request: YouTubeSearchRequest) => {
-    try {
-      return Boolean(await getBestYouTubeVideoId(request))
-    } catch (error) {
-      console.error('youtube-has-source failed', error)
-      return false
-    }
-  })
-
   // Download Handlers
   ipcMain.handle('download-video', async (_event, videoId, songInfo) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`

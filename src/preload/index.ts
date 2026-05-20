@@ -29,8 +29,6 @@ const api = {
   searchTracks: (term: string, country?: string) =>
     ipcRenderer.invoke('search-tracks', term, country),
   youtubeSearch: (request: YouTubeSearchRequest) => ipcRenderer.invoke('youtube-search', request),
-  youtubeHasSource: (request: YouTubeSearchRequest) =>
-    ipcRenderer.invoke('youtube-has-source', request),
 
   // Downloads
   downloadVideo: (videoId: string, songInfo: SongInfo) =>

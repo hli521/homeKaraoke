@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 import { Search, Music, Mic2, ArrowLeft, Plus, X } from 'lucide-react'
 import { searchArtists, searchTracks } from '../../services/music-metadata'
 import type { ArtistResult, TrackResult } from '../../services/music-metadata'
-import { hasYouTubeKaraokeSource, searchYouTubeKaraoke } from '../../services/youtube'
+import { searchYouTubeKaraoke } from '../../services/youtube'
 import type { YouTubeAudioMode } from '../../services/youtube'
 import Player from '../Player/Player'
 import AudioModeToggle from '../AudioModeToggle/AudioModeToggle'
@@ -134,7 +134,6 @@ type CustomArtistsByRegion = Record<string, string[]>
 
 const CUSTOM_ARTISTS_STORAGE_KEY = 'karaoke.customArtistsByRegion'
 const REMOVED_ARTISTS_STORAGE_KEY = 'karaoke.removedArtistsByRegion'
-const MAX_SONG_SOURCE_CHECKS = 12
 
 const readCustomArtists = (): CustomArtistsByRegion => {
   try {
@@ -200,21 +199,6 @@ const getTopRelevantArtists = (artists: ArtistResult[], query: string): ArtistRe
     })
     .sort((a, b) => b.relevance - a.relevance)
     .slice(0, 5)
-}
-
-const filterTracksWithVideoSource = async (
-  tracks: TrackResult[],
-  audioMode: YouTubeAudioMode
-): Promise<TrackResult[]> => {
-  const candidateTracks = tracks.slice(0, MAX_SONG_SOURCE_CHECKS)
-  const sourceChecks = await Promise.all(
-    candidateTracks.map(async (track) => ({
-      track,
-      hasSource: await hasYouTubeKaraokeSource(track.artist.name, track.name, audioMode)
-    }))
-  )
-
-  return sourceChecks.filter((result) => result.hasSource).map((result) => result.track)
 }
 
 type DisplayArtist = {
@@ -359,6 +343,7 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
     }
     setLoading(true)
     setSearchQuery(query)
+    setDisplayTracks([])
     try {
       const artists = await searchArtists(query, activeRegion.code)
       setDisplayArtists(
@@ -370,8 +355,7 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
       )
 
       const songResults = await searchTracks(query, activeRegion.code)
-      const tracksWithSources = await filterTracksWithVideoSource(songResults || [], audioMode)
-      setDisplayTracks(tracksWithSources)
+      setDisplayTracks(songResults || [])
     } catch (error) {
       console.error('Search failed', error)
     } finally {
