@@ -17,6 +17,16 @@ type YouTubeSearchRequest = {
   audioMode: 'original' | 'karaoke'
 }
 
+type CachedSongRequest = {
+  title: string
+  artist: string
+  audioMode: 'original' | 'karaoke'
+}
+
+type PrepareSongRequest = CachedSongRequest & {
+  youtubeId: string
+}
+
 // Custom APIs for renderer
 const api = {
   // Metadata
@@ -29,6 +39,9 @@ const api = {
   searchTracks: (term: string, country?: string) =>
     ipcRenderer.invoke('search-tracks', term, country),
   youtubeSearch: (request: YouTubeSearchRequest) => ipcRenderer.invoke('youtube-search', request),
+  getCachedSong: (request: CachedSongRequest) => ipcRenderer.invoke('get-cached-song', request),
+  prepareCachedSong: (request: PrepareSongRequest) =>
+    ipcRenderer.invoke('prepare-cached-song', request),
 
   // Downloads
   downloadVideo: (videoId: string, songInfo: SongInfo) =>

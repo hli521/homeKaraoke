@@ -4,3 +4,5 @@ out
 .DS_Store
 .eslintcache
 *.log*
+resources/whisper/darwin-arm64/ggml-small.bin
+resources/whisper/darwin-arm64/ggml-small.tar.gz

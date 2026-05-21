@@ -16,6 +16,39 @@ type YouTubeSearchRequest = {
   audioMode: 'original' | 'karaoke'
 }
 
+type CachedSongRequest = {
+  title: string
+  artist: string
+  audioMode: 'original' | 'karaoke'
+}
+
+type PrepareSongRequest = CachedSongRequest & {
+  youtubeId: string
+}
+
+type LyricWord = {
+  text: string
+  startTime: number
+  endTime: number
+}
+
+type LyricLine = {
+  text: string
+  startTime: number
+  endTime: number
+  words: LyricWord[]
+}
+
+type CachedSong = {
+  songKey: string
+  title: string
+  artist: string
+  audioMode: 'original' | 'karaoke'
+  youtubeId: string | null
+  audioUrl: string
+  lyrics: LyricLine[]
+}
+
 type KaraokeAPI = {
   fetchTopTracks: (countryCode: string) => Promise<unknown[]>
   fetchTopArtists: (countryCode: string) => Promise<unknown[]>
@@ -23,6 +56,8 @@ type KaraokeAPI = {
   fetchArtistTopTracks: (artistId: string | number, country?: string) => Promise<unknown[]>
   searchTracks: (term: string, country?: string) => Promise<unknown[]>
   youtubeSearch: (request: YouTubeSearchRequest) => Promise<string | null>
+  getCachedSong: (request: CachedSongRequest) => Promise<CachedSong | null>
+  prepareCachedSong: (request: PrepareSongRequest) => Promise<CachedSong | null>
   downloadVideo: (videoId: string, songInfo: SongInfo) => Promise<unknown>
   getDownloadStatus: (videoId: string) => Promise<unknown>
   onDownloadProgress: (callback: (value: DownloadProgress) => void) => () => void

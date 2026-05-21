@@ -3,8 +3,12 @@ import type { ReactElement } from 'react'
 import { Search, Music, Mic2, ArrowLeft, Plus, X } from 'lucide-react'
 import { searchArtists, searchTracks } from '../../services/music-metadata'
 import type { ArtistResult, TrackResult } from '../../services/music-metadata'
-import { searchYouTubeKaraoke } from '../../services/youtube'
-import type { YouTubeAudioMode } from '../../services/youtube'
+import {
+  getCachedKtvSong,
+  prepareCachedKtvSong,
+  searchYouTubeKaraoke
+} from '../../services/youtube'
+import type { CachedKtvSong, YouTubeAudioMode } from '../../services/youtube'
 import Player from '../Player/Player'
 import AudioModeToggle from '../AudioModeToggle/AudioModeToggle'
 
@@ -252,6 +256,7 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
 
   const [selectedSong, setSelectedSong] = useState<TrackResult | null>(null)
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null)
+  const [cachedSong, setCachedSong] = useState<CachedKtvSong | null>(null)
   const [videoSearchStatus, setVideoSearchStatus] = useState<'searching' | 'found' | 'not-found'>(
     'not-found'
   )
@@ -366,15 +371,39 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
   const playSong = async (track: TrackResult): Promise<void> => {
     setSelectedSong(track)
     setCurrentVideoId(null)
+    setCachedSong(null)
     setVideoSearchStatus('searching')
     setLoading(true)
     try {
+      const cachedKtvSong = await getCachedKtvSong(track.artist.name, track.name, audioMode)
+      if (cachedKtvSong) {
+        setCachedSong(cachedKtvSong)
+        setVideoSearchStatus('found')
+        return
+      }
+
       const videoId = await searchYouTubeKaraoke(track.artist.name, track.name, audioMode)
-      setCurrentVideoId(videoId)
-      setVideoSearchStatus(videoId ? 'found' : 'not-found')
+      if (!videoId) {
+        setVideoSearchStatus('not-found')
+        return
+      }
+
+      const preparedKtvSong = await prepareCachedKtvSong(
+        track.artist.name,
+        track.name,
+        audioMode,
+        videoId
+      )
+      if (preparedKtvSong) {
+        setCachedSong(preparedKtvSong)
+      } else {
+        setCurrentVideoId(videoId)
+      }
+      setVideoSearchStatus('found')
     } catch (error) {
       console.error('Failed to find video', error)
       setCurrentVideoId(null)
+      setCachedSong(null)
       setVideoSearchStatus('not-found')
     } finally {
       setLoading(false)
@@ -392,12 +421,14 @@ const Discovery = ({ audioMode, onAudioModeChange }: DiscoveryProps): ReactEleme
         <Player
           song={selectedSong}
           videoId={currentVideoId}
+          cachedSong={cachedSong}
           videoSearchStatus={videoSearchStatus}
           audioMode={audioMode}
           onAudioModeChange={onAudioModeChange}
           onClose={() => {
             setSelectedSong(null)
             setCurrentVideoId(null)
+            setCachedSong(null)
             setVideoSearchStatus('not-found')
           }}
         />
