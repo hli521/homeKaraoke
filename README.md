@@ -8,6 +8,19 @@ An Electron application with React and TypeScript
 
 ## Project Setup
 
+### Clone Repo
+
+```bash
+$ git clone ssh
+```
+
+### Download Binaries
+
+```bash
+# For macOS
+$ ./arm_setup.sh
+```
+
 ### Install
 
 ```bash
